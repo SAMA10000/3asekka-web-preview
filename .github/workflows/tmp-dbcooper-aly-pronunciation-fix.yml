@@ -1,0 +1,51 @@
+name: Temporary DB Cooper Aly Pronunciation Fix
+on:
+  push:
+    branches: [tmp-dbcooper-video]
+jobs:
+  aly-fix:
+    strategy:
+      fail-fast: false
+      matrix:
+        idx: [6,7,10]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      IDX: ${{ matrix.idx }}
+      OMP_NUM_THREADS: '4'
+      MKL_NUM_THREADS: '4'
+      HF_HUB_DISABLE_XET: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/cache/restore@v4
+        with:
+          path: ~/.cache/huggingface
+          key: voicetut-aly-model-v1
+          fail-on-cache-miss: true
+      - name: Install runtime
+        run: |
+          pip install -q torch==2.8.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cpu
+          pip install -q git+https://github.com/k2-fsa/OmniVoice.git
+          pip install -q voicetut-tts
+      - name: Generate corrected Aly chapter
+        run: |
+          mkdir -p out
+          python - <<'PY'
+          import os,json,torch,wave
+          from voicetut_tts import VoiceTutTTS
+          from omnivoice.utils.common import fix_random_seed
+          idx=int(os.environ['IDX']); chunks=json.load(open('.tmp/dbcooper/chunks_v2.json',encoding='utf-8'))
+          torch.set_num_threads(4); torch.set_num_interop_threads(4); fix_random_seed(1971)
+          tts=VoiceTutTTS.from_pretrained('mohammedaly22/VoiceTut-TTS',device='cpu',dtype='float32')
+          out=f'out/dbcooper_aly_{idx:02d}.wav'
+          tts.synthesize(chunks[idx],speaker='Aly',num_step=32,guidance_scale=2.5,speed=1.0,output=out)
+          with wave.open(out,'rb') as w: print('idx',idx,'duration',w.getnframes()/w.getframerate())
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dbcooper-aly-fix-${{ matrix.idx }}
+          path: out/
+          retention-days: 1
