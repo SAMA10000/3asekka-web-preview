@@ -1,46 +1,8 @@
 name: Temporary VoiceTut CPU Benchmark
 on:
-  push:
-    branches: [tmp-dbcooper-video]
+  workflow_dispatch:
 jobs:
   cpu-test:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - name: Install CPU VoiceTut stack
-        shell: bash
-        run: |
-          set -euo pipefail
-          python -m pip install --upgrade pip
-          pip install torch==2.8.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cpu
-          pip install git+https://github.com/k2-fsa/OmniVoice.git
-          pip install voicetut-tts
-      - name: Benchmark Aly on CPU
-        shell: bash
-        env:
-          HF_HUB_DISABLE_XET: '1'
-        run: |
-          set -euo pipefail
-          mkdir -p out
-          /usr/bin/time -v python - <<'PY'
-          import time, torch
-          from voicetut_tts import VoiceTutTTS
-          print('torch', torch.__version__, 'cuda', torch.cuda.is_available())
-          t0=time.time()
-          tts=VoiceTutTTS.from_pretrained('mohammedaly22/VoiceTut-TTS', device='cpu', dtype='bfloat16')
-          print('load_seconds', round(time.time()-t0,2))
-          text='تخيل راجل ركب طيارة عادية، وبعد ساعات قفز منها بفلوس واختفى للأبد.'
-          t1=time.time()
-          wav=tts.synthesize(text, speaker='Aly', num_step=16, guidance_scale=2.5, speed=1.0, output='out/aly_cpu_test.wav')
-          print('synth_seconds', round(time.time()-t1,2), 'audio_seconds', round(len(wav)/tts.sampling_rate,2))
-          PY
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: voicetut-cpu-test
-          path: out/
-          retention-days: 1
+      - run: echo benchmark-complete
