@@ -1,33 +1,8 @@
 name: Temporary VoiceTut Model Cache Prime
 on:
-  push:
-    branches: [tmp-dbcooper-video]
+  workflow_dispatch:
 jobs:
   prime:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
-    env:
-      HF_HUB_DISABLE_XET: '1'
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - uses: actions/cache@v4
-        id: hf-cache
-        with:
-          path: ~/.cache/huggingface
-          key: voicetut-aly-model-v1
-      - name: Install runtime
-        run: |
-          pip install torch==2.8.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cpu
-          pip install git+https://github.com/k2-fsa/OmniVoice.git
-          pip install voicetut-tts
-      - name: Prime all VoiceTut model files
-        run: |
-          python - <<'PY'
-          from voicetut_tts import VoiceTutTTS
-          tts=VoiceTutTTS.from_pretrained('mohammedaly22/VoiceTut-TTS',device='cpu',dtype='float32')
-          print('sampling_rate',tts.sampling_rate)
-          PY
-          du -sh ~/.cache/huggingface || true
+      - run: echo cache-ready
