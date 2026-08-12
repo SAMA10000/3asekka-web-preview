@@ -1,0 +1,45 @@
+name: Temporary VoiceTut CPU Optimization
+on:
+  push:
+    branches: [tmp-dbcooper-video]
+jobs:
+  opt-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      OMP_NUM_THREADS: '4'
+      MKL_NUM_THREADS: '4'
+      HF_HUB_DISABLE_XET: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install
+        run: |
+          pip install torch==2.8.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cpu
+          pip install git+https://github.com/k2-fsa/OmniVoice.git
+          pip install voicetut-tts
+      - name: Benchmark float32 four threads
+        run: |
+          mkdir -p out
+          /usr/bin/time -v python - <<'PY'
+          import time, torch
+          from voicetut_tts import VoiceTutTTS
+          from omnivoice.utils.common import fix_random_seed
+          torch.set_num_threads(4)
+          torch.set_num_interop_threads(4)
+          fix_random_seed(1971)
+          t0=time.time()
+          tts=VoiceTutTTS.from_pretrained('mohammedaly22/VoiceTut-TTS', device='cpu', dtype='float32')
+          print('load_seconds',round(time.time()-t0,2),'threads',torch.get_num_threads())
+          text='تخيل راجل ركب طيارة عادية، وبعد ساعات قفز منها بفلوس واختفى للأبد.'
+          t=time.time(); wav=tts.synthesize(text,speaker='Aly',num_step=16,guidance_scale=2.5,speed=1.0,output='out/aly_float32_4t.wav')
+          print('synth_seconds',round(time.time()-t,2),'audio_seconds',round(len(wav)/tts.sampling_rate,2))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: voicetut-cpu-opt
+          path: out/
+          retention-days: 1
