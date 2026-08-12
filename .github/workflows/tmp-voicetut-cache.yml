@@ -27,8 +27,7 @@ jobs:
         run: |
           python - <<'PY'
           from voicetut_tts import VoiceTutTTS
-          tts=VoiceTutTTS.from_pretrained('mohammedaly22/VoiceTut-TTS',device='cpu',dtype='bfloat16')
+          tts=VoiceTutTTS.from_pretrained('mohammedaly22/VoiceTut-TTS',device='cpu',dtype='float32')
           print('sampling_rate',tts.sampling_rate)
-          print('speakers',[s.name for s in tts.list_speakers()])
           PY
           du -sh ~/.cache/huggingface || true
