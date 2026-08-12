@@ -1,22 +1,8 @@
 name: Temporary DB Cooper Egyptian Male Voice
 on:
-  push:
-    branches: [tmp-dbcooper-video]
+  workflow_dispatch:
 jobs:
   tts:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Generate full Egyptian male narration in one take
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p out
-          python3 -m pip install -q edge-tts
-          python3 -m edge_tts --voice "ar-EG-ShakirNeural" --rate="-2%" --pitch="-3Hz" --file .tmp/dbcooper/script_ar.txt --write-media out/dbcooper_shakir.mp3
-          ls -lh out/dbcooper_shakir.mp3
-      - uses: actions/upload-artifact@v4
-        with:
-          name: dbcooper-shakir-voice
-          path: out/dbcooper_shakir.mp3
-          retention-days: 1
+      - run: echo disabled
