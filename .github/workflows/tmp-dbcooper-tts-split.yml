@@ -1,56 +1,8 @@
 name: Temporary DB Cooper Aly Sequential Voice
 on:
-  push:
-    branches: [tmp-dbcooper-video]
+  workflow_dispatch:
 jobs:
-  tts:
+  disabled:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Generate five Aly chapters sequentially with retry
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p out
-          python3 -m pip install -q gradio_client
-          python3 - <<'PY'
-          import json, urllib.request, urllib.error, time, os, shutil, wave
-          from gradio_client import Client
-          bridge='https://voicetut-bridge.lovable.app/api/public/tts'
-          client=None
-          for idx in range(5):
-              text=open(f'.tmp/dbcooper/chunk{idx}.txt',encoding='utf-8').read()
-              out=f'out/dbcooper_{idx}.wav'
-              ok=False
-              # First try our bridge a few times, sequentially.
-              for attempt in range(4):
-                  try:
-                      payload=json.dumps({'text':text,'speaker':'Aly','speed':1.0,'steps':32,'guidance':2.5}).encode('utf-8')
-                      req=urllib.request.Request(bridge,data=payload,headers={'Content-Type':'application/json','User-Agent':'Mozilla/5.0'},method='POST')
-                      with urllib.request.urlopen(req,timeout=240) as r: data=r.read()
-                      if data.startswith(b'RIFF') and len(data)>10000:
-                          open(out,'wb').write(data); ok=True; print('bridge OK',idx,len(data)); break
-                  except Exception as e:
-                      print('bridge fail',idx,attempt,type(e).__name__,e)
-                  time.sleep(18+attempt*10)
-              # Fallback: call the public VoiceTut Gradio Space directly.
-              if not ok:
-                  if client is None: client=Client('mohammedaly22/VoiceTut-TTS')
-                  for attempt in range(3):
-                      try:
-                          r=client.predict('Aly',text,'العربية (Egyptian)',32,2.5,1.0,True,api_name='/run_b_oneshot')
-                          src=r[0] if isinstance(r,(list,tuple)) else r
-                          shutil.copy(src,out); ok=True; print('direct OK',idx,src); break
-                      except Exception as e:
-                          print('direct fail',idx,attempt,type(e).__name__,e)
-                          time.sleep(25+attempt*15)
-              if not ok: raise SystemExit(f'chapter {idx} failed')
-              with wave.open(out,'rb') as w:
-                  print('chapter',idx,'duration',round(w.getnframes()/w.getframerate(),3),'rate',w.getframerate())
-              time.sleep(22)
-          PY
-      - uses: actions/upload-artifact@v4
-        with:
-          name: dbcooper-voice-all
-          path: out/
-          retention-days: 1
+      - run: echo disabled
