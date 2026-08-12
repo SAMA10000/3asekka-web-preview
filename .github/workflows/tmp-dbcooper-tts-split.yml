@@ -1,0 +1,39 @@
+name: Temporary DB Cooper Aly Split Voice
+on:
+  push:
+    branches: [tmp-dbcooper-video]
+jobs:
+  tts:
+    strategy:
+      fail-fast: false
+      matrix:
+        idx: [0,1,2,3,4]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generate Aly chapter
+        shell: bash
+        env:
+          IDX: ${{ matrix.idx }}
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          python3 - <<'PY'
+          import os,json,urllib.request,wave
+          idx=os.environ['IDX']
+          text=open(f'.tmp/dbcooper/chunk{idx}.txt',encoding='utf-8').read()
+          payload=json.dumps({'text':text,'speaker':'Aly','speed':1.0,'steps':32,'guidance':2.5}).encode('utf-8')
+          req=urllib.request.Request('https://voicetut-bridge.lovable.app/api/public/tts',data=payload,headers={'Content-Type':'application/json','User-Agent':'Mozilla/5.0'},method='POST')
+          with urllib.request.urlopen(req,timeout=240) as r:
+              data=r.read(); print('status',r.status,'type',r.headers.get('content-type'),'bytes',len(data))
+          if not data.startswith(b'RIFF'):
+              print(data[:1000]); raise SystemExit('not wav')
+          path=f'out/dbcooper_{idx}.wav'; open(path,'wb').write(data)
+          with wave.open(path,'rb') as w: print('duration',w.getnframes()/w.getframerate(),'rate',w.getframerate())
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dbcooper-voice-${{ matrix.idx }}
+          path: out/
+          retention-days: 1
