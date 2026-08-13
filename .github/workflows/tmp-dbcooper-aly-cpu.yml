@@ -1,0 +1,86 @@
+name: temp-dbcooper-aly-cpu
+on:
+  push:
+    branches: [tmp-dbcooper-aly-1min-20260813]
+  workflow_dispatch:
+
+jobs:
+  generate:
+    strategy:
+      fail-fast: false
+      max-parallel: 13
+      matrix:
+        segment: [0,1,2,3,4,5,6,7,8,9,10,11,12]
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install CPU VoiceTut
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch==2.8.0+cpu torchaudio==2.8.0+cpu --index-url https://download.pytorch.org/whl/cpu
+          pip install git+https://github.com/k2-fsa/OmniVoice.git
+          pip install voicetut-tts==0.1.1
+      - name: Generate Aly segment
+        env:
+          SEGMENT: ${{ matrix.segment }}
+        shell: bash
+        run: |
+          python - <<'PY'
+          import os, pathlib
+          from voicetut_tts import VoiceTutTTS
+          idx=int(os.environ['SEGMENT'])
+          raw=pathlib.Path('tmp/dbcooper_1min_aly_segments.txt').read_text(encoding='utf-8')
+          chunks=[x.strip() for x in raw.split('---CHUNK---') if x.strip()]
+          text=chunks[idx]
+          out=f'aly_{idx:02d}.wav'
+          tts=VoiceTutTTS.from_pretrained('mohammedaly22/VoiceTut-TTS', device='cpu')
+          tts.synthesize(text, speaker='Aly', output=out, num_step=24, guidance_scale=2.5, speed=1.0)
+          print('DONE', idx, out, text)
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aly-seg-${{ matrix.segment }}
+          path: aly_*.wav
+          if-no-files-found: error
+          retention-days: 1
+
+  assemble:
+    needs: generate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: aly-seg-*
+          path: audio
+          merge-multiple: true
+      - name: Assemble in exact order
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          files=sorted(Path('audio').glob('aly_*.wav'))
+          if len(files)!=13:
+              raise SystemExit(f'Expected 13 WAV files, got {len(files)}')
+          with open('concat.txt','w') as f:
+              for p in files:
+                  f.write("file '"+str(p.resolve()).replace("'","'\\''")+"'\n")
+          print('\n'.join(str(x) for x in files))
+          PY
+          ffmpeg -y -hide_banner -loglevel error -f concat -safe 0 -i concat.txt -c:a pcm_s16le aly_full.wav
+          ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 aly_full.wav > duration.txt
+          sha256sum aly_full.wav > sha256.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dbcooper-aly-cpu-1min
+          path: |
+            aly_full.wav
+            duration.txt
+            sha256.txt
+            audio/aly_*.wav
+          if-no-files-found: error
+          retention-days: 1
