@@ -1,0 +1,30 @@
+name: Temporary Aly audio transfer
+
+on:
+  push:
+    branches:
+      - tmp-aly-transfer-20260813
+
+permissions:
+  contents: read
+
+jobs:
+  fetch-audio:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Aly narration
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 --retry-delay 3 \
+            'https://voicetut-aly-render.lovable.app/aly_china_population.ogg' \
+            --output aly_china_population.ogg
+          echo '05b7173e839d45d04e543ce430ebc01687d9d047071f3d814b00bb86948d90aa  aly_china_population.ogg' | sha256sum --check --strict
+          ffprobe -v error -show_entries format=duration,size -of json aly_china_population.ogg
+      - name: Upload narration artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: aly-china-population
+          path: aly_china_population.ogg
+          if-no-files-found: error
+          retention-days: 1
