@@ -1,0 +1,140 @@
+name: ChatGPT NAMAA Safety Audio Parallel
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'run/namaa-audio-parallel-request.txt'
+
+permissions:
+  contents: read
+
+jobs:
+  generate-parts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: safety_general
+            index: '01'
+            text: 'أهلاً بيك في عالسكة. قبل ما تكمل، اسمع قواعد الأمان دي كويس. الاحترام إلزامي، وممنوع الشتيمة أو التهديد أو التحرش أو التمييز أو أي إساءة للطرف التاني. الاتفاق على النقلة والسعر الأساسي والتواصل المرتبط بيها يفضل داخل عالسكة.'
+          - label: safety_general
+            index: '02'
+            text: 'وممنوع تبادل أرقام أو روابط بهدف تنفيذ النقلة أو الاتفاق خارج التطبيق. ممنوع استخدام عالسكة لنقل بضائع غير قانونية أو مسروقة أو محظورة، أو إخفاء طبيعة حمولة خطرة أو مقيدة.'
+          - label: safety_general
+            index: '03'
+            text: 'ممنوع مشاركة كلمات المرور أو بيانات الدفع السرية أو صور المستندات الشخصية داخل الشات. التزم بالسلامة، وما تطلبش ولا تنفذ حمولة أو قيادة تعرض أي شخص أو العربية أو الطريق للخطر. كعميل، اكتب نوع الحمولة ووزنها وحجمها وعناوين الاستلام والتسليم بدقة.'
+          - label: safety_general
+            index: '04'
+            text: 'وما تطلبش من السائق حمولة زائدة أو مخالفة للطريق أو نقلة لبضاعة ما تملكش حق إرسالها. وكسائق، استخدم العربية المعتمدة على حسابك بمستندات سارية، والتزم بالحمولة الآمنة وحالة الرحلة الحقيقية.'
+          - label: safety_general
+            index: '05'
+            text: 'وارفض الحمولة لو اختلفت بشكل جوهري عن الوصف أو بدت غير قانونية أو غير آمنة. إدارة عالسكة ممكن تراجع المحادثات وسجل المكالمات الداخلية وحالتها ومدتها عند الحاجة للأمان وحل النزاعات، لكن صوت المكالمة نفسه مش بيتسجل في النظام الحالي.'
+          - label: safety_general
+            index: '06'
+            text: 'أي مخالفة جسيمة أو متكررة ممكن تؤدي لتحذير الحساب أو تقييده أو إيقافه بعد مراجعة الإدارة.'
+          - label: communication_warning
+            index: '01'
+            text: 'خلي اتفاقك جوه عالسكة. لأمان حقك وحق الطرف التاني، خلي السعر والاتفاق والتواصل المرتبط بالنقلة داخل عالسكة. ممنوع تبادل أرقام أو روابط بهدف تنفيذ النقلة أو الاتفاق خارج التطبيق. لو اتفقتوا أو دفعتوا خارج عالسكة، ممكن ما نقدرش نتحقق من تفاصيل الاتفاق.'
+          - label: communication_warning
+            index: '02'
+            text: 'أو نساعدكم بنفس الدرجة لو حصل نزاع. محادثات عالسكة وسجل المكالمات الداخلية ممكن تراجعها الإدارة لأغراض الأمان وحل النزاعات. المكالمات الصوتية نفسها لا يتم تسجيلها.'
+
+    steps:
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install client
+        run: pip install 'gradio_client>=1.4,<2'
+
+      - name: Generate one NAMAA part
+        env:
+          TEXT: ${{ matrix.text }}
+          LABEL: ${{ matrix.label }}
+          INDEX: ${{ matrix.index }}
+        run: |
+          cat > /tmp/one.py <<'PY'
+          import os, shutil
+          from pathlib import Path
+          from gradio_client import Client
+          c=Client('omarelshehy/NAMAA-Egyptian-Voice')
+          text=os.environ['TEXT']
+          errors=[]
+          result=None
+          for args in [
+              (text,'ar',None,0.5,0.8,0,0.5),
+              (text,None,0.5,0.8,0,0.5),
+          ]:
+              try:
+                  result=c.predict(*args,api_name='/generate_tts_audio')
+                  break
+              except Exception as e:
+                  errors.append(repr(e))
+          if result is None:
+              raise RuntimeError(' | '.join(errors))
+          def path_of(r):
+              if isinstance(r,str): return Path(r)
+              if isinstance(r,dict):
+                  for k in ('path','name'):
+                      if isinstance(r.get(k),str): return Path(r[k])
+              if isinstance(r,(list,tuple)):
+                  for x in r:
+                      try:return path_of(x)
+                      except:pass
+              raise RuntimeError(repr(r))
+          p=path_of(result)
+          out=Path('part.wav')
+          shutil.copyfile(p,out)
+          print('OUTPUT',out,out.stat().st_size)
+          PY
+          python /tmp/one.py
+
+      - name: Upload part
+        uses: actions/upload-artifact@v4
+        with:
+          name: part-${{ matrix.label }}-${{ matrix.index }}
+          path: part.wav
+          retention-days: 2
+
+  combine:
+    needs: generate-parts
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Download all parts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: part-*
+          path: parts
+
+      - name: Install ffmpeg
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+
+      - name: Combine exact order
+        run: |
+          mkdir -p final
+          for label in safety_general communication_warning; do
+            find parts -type f -path "*part-${label}-*/part.wav" | sort | awk '{print "file '\''" $0 "'\''"}' > "${label}.txt"
+            cat "${label}.txt"
+            ffmpeg -y -f concat -safe 0 -i "${label}.txt" -ar 24000 -ac 1 "final/${label}.wav"
+            ffmpeg -y -i "final/${label}.wav" -codec:a libmp3lame -b:a 96k "final/${label}.mp3"
+            test -s "final/${label}.mp3"
+            ffprobe -v error -show_entries format=duration -of default=nk=1:nw=1 "final/${label}.mp3"
+          done
+
+      - name: Upload final audio
+        uses: actions/upload-artifact@v4
+        with:
+          name: 3asekka-namaa-safety-audio-final
+          path: |
+            final/safety_general.mp3
+            final/communication_warning.mp3
+            final/safety_general.wav
+            final/communication_warning.wav
+          retention-days: 7
