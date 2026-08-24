@@ -1,0 +1,33 @@
+name: ChatGPT Production Transport Probe
+
+on:
+  push:
+    paths:
+      - '.github/workflows/chatgpt-production-transport-probe.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report configured transport capabilities only
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_TOKEN: ${{ secrets.SUPABASE_TOKEN }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          HOSTINGER_HOST: ${{ secrets.HOSTINGER_HOST }}
+        run: |
+          present(){ if [ -n "$2" ]; then echo "$1=YES"; else echo "$1=NO"; fi; }
+          present SUPABASE_ACCESS_TOKEN "$SUPABASE_ACCESS_TOKEN"
+          present SUPABASE_TOKEN "$SUPABASE_TOKEN"
+          present VPS_HOST "$VPS_HOST"
+          present VPS_USER "$VPS_USER"
+          present VPS_SSH_KEY "$VPS_SSH_KEY"
+          present SSH_PRIVATE_KEY "$SSH_PRIVATE_KEY"
+          present HOSTINGER_HOST "$HOSTINGER_HOST"
