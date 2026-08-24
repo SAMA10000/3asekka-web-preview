@@ -1,0 +1,146 @@
+name: ChatGPT NAMAA Safety Audio
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  namaa-tts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install client tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install 'gradio_client>=1.4,<2' soundfile numpy
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+
+      - name: Generate NAMAA Egyptian safety audio
+        env:
+          HF_SPACE: omarelshehy/NAMAA-Egyptian-Voice
+        run: |
+          cat > /tmp/generate.py <<'PY'
+          import os, re, shutil, subprocess, time
+          from pathlib import Path
+          from gradio_client import Client
+
+          OUT = Path('namaa_audio_out')
+          OUT.mkdir(exist_ok=True)
+
+          general = '''أهلاً بيك في عالسكة. قبل ما تكمل، اسمع قواعد الأمان دي كويس. الاحترام إلزامي، وممنوع الشتيمة أو التهديد أو التحرش أو التمييز أو أي إساءة للطرف التاني. الاتفاق على النقلة والسعر الأساسي والتواصل المرتبط بيها يفضل داخل عالسكة، وممنوع تبادل أرقام أو روابط بهدف تنفيذ النقلة أو الاتفاق خارج التطبيق. ممنوع استخدام عالسكة لنقل بضائع غير قانونية أو مسروقة أو محظورة، أو إخفاء طبيعة حمولة خطرة أو مقيدة. ممنوع مشاركة كلمات المرور أو بيانات الدفع السرية أو صور المستندات الشخصية داخل الشات. التزم بالسلامة، وما تطلبش ولا تنفذ حمولة أو قيادة تعرض أي شخص أو العربية أو الطريق للخطر. كعميل، اكتب نوع الحمولة ووزنها وحجمها وعناوين الاستلام والتسليم بدقة، وما تطلبش من السائق حمولة زائدة أو مخالفة للطريق أو نقلة لبضاعة ما تملكش حق إرسالها. وكسائق، استخدم العربية المعتمدة على حسابك بمستندات سارية، والتزم بالحمولة الآمنة وحالة الرحلة الحقيقية، وارفض الحمولة لو اختلفت بشكل جوهري عن الوصف أو بدت غير قانونية أو غير آمنة. إدارة عالسكة ممكن تراجع المحادثات وسجل المكالمات الداخلية وحالتها ومدتها عند الحاجة للأمان وحل النزاعات، لكن صوت المكالمة نفسه مش بيتسجل في النظام الحالي. أي مخالفة جسيمة أو متكررة ممكن تؤدي لتحذير الحساب أو تقييده أو إيقافه بعد مراجعة الإدارة.'''
+
+          communication = '''خلي اتفاقك جوه عالسكة. لأمان حقك وحق الطرف التاني، خلي السعر والاتفاق والتواصل المرتبط بالنقلة داخل عالسكة. ممنوع تبادل أرقام أو روابط بهدف تنفيذ النقلة أو الاتفاق خارج التطبيق. لو اتفقتوا أو دفعتوا خارج عالسكة، ممكن ما نقدرش نتحقق من تفاصيل الاتفاق أو نساعدكم بنفس الدرجة لو حصل نزاع. محادثات عالسكة وسجل المكالمات الداخلية ممكن تراجعها الإدارة لأغراض الأمان وحل النزاعات. المكالمات الصوتية نفسها لا يتم تسجيلها.'''
+
+          def chunks(text, limit=260):
+              text = re.sub(r'\s+', ' ', text.strip())
+              sents = re.split(r'(?<=[.!؟،])\s+', text)
+              out, cur = [], ''
+              for s in sents:
+                  if len(s) > limit:
+                      words = s.split()
+                      for w in words:
+                          if len(cur) + 1 + len(w) <= limit:
+                              cur = (cur + ' ' + w).strip()
+                          else:
+                              if cur: out.append(cur)
+                              cur = w
+                      continue
+                  if len(cur) + 1 + len(s) <= limit:
+                      cur = (cur + ' ' + s).strip()
+                  else:
+                      if cur: out.append(cur)
+                      cur = s
+              if cur: out.append(cur)
+              return out
+
+          client = Client(os.environ['HF_SPACE'])
+          try:
+              print(client.view_api(return_format='dict'))
+          except Exception as e:
+              print('VIEW_API_WARNING', repr(e))
+
+          def synth_one(text):
+              errors = []
+              calls = [
+                  lambda: client.predict(text, 'ar', None, 0.5, 0.8, 0, 0.5, api_name='/generate_tts_audio'),
+                  lambda: client.predict(text, None, 0.5, 0.8, 0, 0.5, api_name='/generate_tts_audio'),
+                  lambda: client.predict(text, 'ar', None, 0.5, 0.8, 0, 0.5, fn_index=1),
+              ]
+              for call in calls:
+                  try:
+                      r = call()
+                      print('TTS_RESULT', r)
+                      return r
+                  except Exception as e:
+                      errors.append(repr(e))
+                      print('TTS_TRY_FAILED', repr(e))
+                      time.sleep(2)
+              raise RuntimeError('All NAMAA calls failed: ' + ' | '.join(errors))
+
+          def result_path(r):
+              if isinstance(r, str): return Path(r)
+              if isinstance(r, dict):
+                  for k in ('path','name','url'):
+                      v = r.get(k)
+                      if isinstance(v, str) and v:
+                          return Path(v)
+              if isinstance(r, (list, tuple)):
+                  for x in r:
+                      try:
+                          p = result_path(x)
+                          if p: return p
+                      except Exception:
+                          pass
+              raise RuntimeError(f'Cannot resolve audio result path: {r!r}')
+
+          def render(label, text):
+              parts = []
+              for i, ch in enumerate(chunks(text), 1):
+                  print(f'GENERATE {label} part {i}: {ch}')
+                  r = synth_one(ch)
+                  p = result_path(r)
+                  dst = OUT / f'{label}_{i:02d}{p.suffix or ".wav"}'
+                  shutil.copyfile(p, dst)
+                  parts.append(dst)
+              concat = OUT / f'{label}_concat.txt'
+              concat.write_text(''.join("file '%s'\n" % p.resolve() for p in parts), encoding='utf-8')
+              wav = OUT / f'{label}.wav'
+              mp3 = OUT / f'{label}.mp3'
+              subprocess.run(['ffmpeg','-y','-f','concat','-safe','0','-i',str(concat),'-ar','24000','-ac','1',str(wav)], check=True)
+              subprocess.run(['ffmpeg','-y','-i',str(wav),'-codec:a','libmp3lame','-b:a','96k',str(mp3)], check=True)
+              return wav, mp3
+
+          g = render('safety_general', general)
+          c = render('communication_warning', communication)
+          print('DONE', g, c)
+          PY
+          python /tmp/generate.py
+
+      - name: List outputs
+        if: always()
+        run: find namaa_audio_out -maxdepth 1 -type f -printf '%f %s bytes\n' 2>/dev/null || true
+
+      - name: Upload audio artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: 3asekka-namaa-safety-audio
+          path: |
+            namaa_audio_out/safety_general.wav
+            namaa_audio_out/safety_general.mp3
+            namaa_audio_out/communication_warning.wav
+            namaa_audio_out/communication_warning.mp3
+          if-no-files-found: error
+          retention-days: 7
