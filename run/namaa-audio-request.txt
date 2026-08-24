@@ -1,0 +1,3 @@
+3ASEKKA NAMAA safety audio generation request
+Date: 2026-08-24
+Purpose: generate the two current safety-policy Egyptian TTS audio files only.
