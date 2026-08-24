@@ -1,0 +1,59 @@
+name: ChatGPT NAMAA Safety Audio PR
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'run/namaa-audio-request.txt'
+      - 'tools/chatgpt_namaa_safety_audio.py'
+
+permissions:
+  contents: read
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install 'gradio_client>=1.4,<2' soundfile numpy
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+
+      - name: Generate Egyptian audio with NAMAA
+        env:
+          HF_SPACE: omarelshehy/NAMAA-Egyptian-Voice
+        run: python tools/chatgpt_namaa_safety_audio.py
+
+      - name: Verify outputs
+        run: |
+          test -s generated/namaa-safety/safety_general.mp3
+          test -s generated/namaa-safety/communication_warning.mp3
+          test -s generated/namaa-safety/safety_general.wav
+          test -s generated/namaa-safety/communication_warning.wav
+          echo 'GENERAL_DURATION_SECONDS='
+          ffprobe -v error -show_entries format=duration -of default=nk=1:nw=1 generated/namaa-safety/safety_general.mp3
+          echo 'COMMUNICATION_DURATION_SECONDS='
+          ffprobe -v error -show_entries format=duration -of default=nk=1:nw=1 generated/namaa-safety/communication_warning.mp3
+
+      - name: Upload audio artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: 3asekka-namaa-safety-audio
+          path: |
+            generated/namaa-safety/safety_general.mp3
+            generated/namaa-safety/communication_warning.mp3
+            generated/namaa-safety/safety_general.wav
+            generated/namaa-safety/communication_warning.wav
+          if-no-files-found: error
+          retention-days: 7
