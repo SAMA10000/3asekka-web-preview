@@ -7,7 +7,7 @@ on:
       - 'run/namaa-audio-parallel-request.txt'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   generate-parts:
@@ -54,8 +54,6 @@ jobs:
       - name: Generate one NAMAA part
         env:
           TEXT: ${{ matrix.text }}
-          LABEL: ${{ matrix.label }}
-          INDEX: ${{ matrix.index }}
         run: |
           cat > /tmp/one.py <<'PY'
           import os, shutil
@@ -65,17 +63,13 @@ jobs:
           text=os.environ['TEXT']
           errors=[]
           result=None
-          for args in [
-              (text,'ar',None,0.5,0.8,0,0.5),
-              (text,None,0.5,0.8,0,0.5),
-          ]:
+          for args in [(text,'ar',None,0.5,0.8,0,0.5),(text,None,0.5,0.8,0,0.5)]:
               try:
                   result=c.predict(*args,api_name='/generate_tts_audio')
                   break
               except Exception as e:
                   errors.append(repr(e))
-          if result is None:
-              raise RuntimeError(' | '.join(errors))
+          if result is None: raise RuntimeError(' | '.join(errors))
           def path_of(r):
               if isinstance(r,str): return Path(r)
               if isinstance(r,dict):
@@ -87,9 +81,8 @@ jobs:
                       except:pass
               raise RuntimeError(repr(r))
           p=path_of(result)
-          out=Path('part.wav')
-          shutil.copyfile(p,out)
-          print('OUTPUT',out,out.stat().st_size)
+          shutil.copyfile(p,'part.wav')
+          print('OUTPUT',Path('part.wav').stat().st_size)
           PY
           python /tmp/one.py
 
@@ -105,6 +98,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      - name: Checkout PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
       - name: Download all parts
         uses: actions/download-artifact@v4
         with:
@@ -118,23 +117,30 @@ jobs:
 
       - name: Combine exact order
         run: |
-          mkdir -p final
+          mkdir -p generated/namaa-safety
           for label in safety_general communication_warning; do
             find parts -type f -path "*part-${label}-*/part.wav" | sort | awk '{print "file '\''" $0 "'\''"}' > "${label}.txt"
-            cat "${label}.txt"
-            ffmpeg -y -f concat -safe 0 -i "${label}.txt" -ar 24000 -ac 1 "final/${label}.wav"
-            ffmpeg -y -i "final/${label}.wav" -codec:a libmp3lame -b:a 96k "final/${label}.mp3"
-            test -s "final/${label}.mp3"
-            ffprobe -v error -show_entries format=duration -of default=nk=1:nw=1 "final/${label}.mp3"
+            ffmpeg -y -f concat -safe 0 -i "${label}.txt" -ar 24000 -ac 1 "generated/namaa-safety/${label}.wav"
+            ffmpeg -y -i "generated/namaa-safety/${label}.wav" -codec:a libmp3lame -b:a 96k "generated/namaa-safety/${label}.mp3"
+            test -s "generated/namaa-safety/${label}.mp3"
+            ffprobe -v error -show_entries format=duration -of default=nk=1:nw=1 "generated/namaa-safety/${label}.mp3"
           done
+
+      - name: Commit final audio to PR branch
+        run: |
+          git config user.name 'chatgpt-automation'
+          git config user.email 'actions@users.noreply.github.com'
+          git add generated/namaa-safety/safety_general.mp3 generated/namaa-safety/communication_warning.mp3 generated/namaa-safety/safety_general.wav generated/namaa-safety/communication_warning.wav
+          git commit -m 'Generate 3ASEKKA NAMAA safety audio'
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
 
       - name: Upload final audio
         uses: actions/upload-artifact@v4
         with:
           name: 3asekka-namaa-safety-audio-final
           path: |
-            final/safety_general.mp3
-            final/communication_warning.mp3
-            final/safety_general.wav
-            final/communication_warning.wav
+            generated/namaa-safety/safety_general.mp3
+            generated/namaa-safety/communication_warning.mp3
+            generated/namaa-safety/safety_general.wav
+            generated/namaa-safety/communication_warning.wav
           retention-days: 7
