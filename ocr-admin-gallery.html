@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>مراجعة صور OCR للسائقين | ع السكة</title>
+<style nonce="ghpages-staticsite">
+:root{font-family:Tahoma,Arial,sans-serif;color:#172435;background:#f3f5f8}
+*{box-sizing:border-box}body{margin:0}header{background:#182a46;color:#fff;padding:18px 5%;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+header h1{font-size:20px;margin:0 0 7px}header p{margin:0;font-size:13px;color:#dde6f5}
+main{max-width:1280px;margin:auto;padding:26px 22px 60px}
+.card,.item{background:#fff;border:1px solid #dfe5ed;border-radius:14px;box-shadow:0 2px 8px #12223a0a}
+.card{padding:22px;max-width:480px;margin:35px auto}
+input,select,button{font:inherit;border-radius:8px;padding:11px;border:1px solid #cad4e1}
+button{cursor:pointer;background:#1d4d84;color:white;border-color:#1d4d84}
+button.secondary{background:transparent;border-color:#9cb0c8;color:#fff}
+label{display:block;margin-bottom:7px;font-weight:600}
+.field{margin-bottom:15px}.field input{width:100%}
+.muted{color:#52637a;font-size:13px}.error{color:#ae2534;white-space:pre-wrap}
+.success{color:#186f4b}.toolbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:15px 0 20px}
+.toolbar input{flex:1;min-width:210px}.toolbar select{min-width:190px}
+.list{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:18px}
+.item{overflow:hidden}.item header{padding:13px 16px;background:#eff3f9;color:#172435;display:block}
+.item header .heading{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center}
+.item h2{font-size:17px;margin:0}.tag{display:inline-block;border-radius:20px;font-size:12px;padding:5px 9px;background:#e9ecf1;color:#304057}
+.tag.problem{background:#ffe7e7;color:#8f2436}.tag.review{background:#fff0cf;color:#805009}.tag.pass{background:#e1f6e9;color:#176644}
+.item .photo{height:240px;display:flex;align-items:center;justify-content:center;background:#f5f7fa;overflow:hidden}
+.photo img{width:100%;height:100%;object-fit:contain}
+.photo .none{padding:22px;text-align:center;color:#59677b}
+.item .details{padding:16px;line-height:1.6}
+dl{display:grid;grid-template-columns:115px 1fr;gap:8px;margin:0 0 14px}
+dt{font-weight:600;color:#566579;font-size:13px}dd{margin:0;overflow-wrap:anywhere;font-size:13px}
+.item a{color:#11569b;text-decoration:underline}
+.item .foot{border-top:1px solid #e9edf2;padding-top:9px;color:#52637a;font-size:12px}
+aside{font-size:13px;color:#5b6472;margin-top:15px;line-height:1.8}
+.hidden,[hidden]{display:none!important}
+@media(max-width:500px){main{padding:14px}.list{grid-template-columns:1fr}.card{margin:12px auto}.item .photo{height:210px}}
+</style>
+<meta http-equiv="Cache-Control" content="no-store"><meta name="referrer" content="no-referrer"></head>
+<body>
+<header>
+<div><h1>أرشيف ومراجعة صور OCR — ع السكة</h1><p>صورة المستند + صاحب المستند + سبب الـOCR، للعرض فقط. القرار النهائي للأدمن.</p></div>
+<button id="logout" class="secondary" hidden type="button">تسجيل الخروج</button>
+</header>
+<main>
+<section id="login-panel" class="card">
+<h2>دخول الأدمن</h2>
+<p class="muted">استخدمي حساب الأدمن الخاص بتطبيق ع السكة. الدخول هنا لا يستخدم حساب لوحة Supabase نفسه بالضرورة.</p>
+<form id="login-form">
+<div class="field"><label for="email">البريد الإلكتروني</label><input id="email" type="email" autocomplete="username" required></div>
+<div class="field"><label for="password">كلمة المرور</label><input id="password" type="password" autocomplete="current-password" required></div>
+<button id="login-button" type="submit">دخول آمن</button>
+</form>
+<p id="login-message" role="status"></p>
+</section>
+<section id="gallery" hidden>
+<div class="toolbar">
+<input id="search" type="search" aria-label="بحث" placeholder="ابحثي باسم السائق أو السبب أو نوع المستند">
+<select id="filter" aria-label="نوع نتيجة OCR">
+<option value="all">كل المستندات والمحاولات</option>
+<option value="REJECT" selected>الرفض الآلي السابق</option>
+<option value="REVIEW">بانتظار مراجعة</option>
+<option value="ERROR">خطأ OCR</option>
+<option value="PASS">قرأه OCR بنجاح</option>
+<option value="archive">صور أرشيف OCR فقط</option>
+</select>
+<button id="refresh" type="button">تحديث</button>
+</div>
+<p id="counts" class="muted" role="status">جار التحميل...</p>
+<div id="items" class="list"></div>
+<aside>نتيجة الـOCR تشخيص فقط، وليست قبولًا أو رفضًا إداريًا. صور الأرشيف محفوظة بشكل خاص وروابط عرضها مؤقتة. عدم ظهور الصورة في سجلات قديمة يعني أنها لم تكن مؤرشفة ضمن محاولة OCR نفسها.</aside>
+</section>
+</main>
+<script type="module" nonce="ghpages-staticsite">
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.110.0?bundle';
+const URL="https://ldyosvgmyblicggcelrk.supabase.co";
+const ANON="sb_publishable_UE7ri0U4jqDzksC14E6ujw_H7oU3Mzv";
+const VIEW='admin_driver_ocr_review_gallery_v1';
+const supabase=createClient(URL,ANON,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});
+const byId=id=>document.getElementById(id);
+const loginPanel=byId('login-panel'),gallery=byId('gallery'),logout=byId('logout');
+let rows=[];
+const labels={
+ national_id_front:'بطاقة الرقم القومي — أمام',
+ national_id_back:'بطاقة الرقم القومي — خلف',
+ driver_license:'رخصة القيادة',
+ vehicle_registration:'رخصة السيارة',
+ vehicle_photo:'صورة السيارة',
+ profile_photo:'صورة السائق'
+};
+const statuses={PASS:'نجاح قراءة OCR (ليس اعتمادًا)',REVIEW:'بانتظار مراجعة بشرية',REJECT:'رفض آلي سابق',ERROR:'فشل قراءة OCR',PENDING:'جارٍ الفحص',UNRECORDED:'لا توجد نتيجة OCR مسجلة'};
+const fmtDate=value=>{
+ try{return new Intl.DateTimeFormat('ar-EG',{dateStyle:'short',timeStyle:'short',timeZone:'Africa/Cairo'}).format(new Date(value));}
+ catch(_){return String(value||'—');}
+};
+const node=(tag,cls,text)=>{
+ const e=document.createElement(tag);
+ if(cls)e.className=cls;
+ if(text!==undefined)e.textContent=String(text??'');
+ return e;
+};
+function showLogin(message){
+ loginPanel.hidden=false;gallery.hidden=true;logout.hidden=true;
+ if(message){byId('login-message').textContent=message;byId('login-message').className='error';}
+}
+function showGallery(){loginPanel.hidden=true;gallery.hidden=false;logout.hidden=false;}
+function goodUrl(value){
+ try{const u=new URL(value);return u.protocol==='https:'?u.href:null;}
+ catch(_){return null;}
+}
+async function signPhoto(item){
+ if(item.storage_bucket && item.storage_path){
+  const r=await supabase.storage.from(item.storage_bucket).createSignedUrl(item.storage_path,300);
+  return r.error?null:goodUrl(r.data?.signedUrl);
+ }
+ if(item.record_source==='driver_document'){
+  const path=item.storage_path||(!goodUrl(item.file_url)&&/^[0-9a-f-]{36}\//i.test(String(item.file_url||''))?item.file_url:null);
+  if(path){
+  const r=await supabase.storage.from('driver-documents').createSignedUrl(path,300);
+  if(!r.error)return goodUrl(r.data?.signedUrl);
+  }
+ }
+ const possible=goodUrl(item.file_url);
+ if(possible && [new URL(URL).hostname,'3asekka.com'].includes(new URL(possible).hostname))return possible;
+ return null;
+}
+async function loadGallery(){
+ byId('counts').textContent='جارِ تحميل سجلات المراجعة...';
+ byId('refresh').disabled=true;
+ try{
+  const r=await supabase.from(VIEW).select('record_source,item_key,driver_id,driver_name,driver_phone,document_type,document_side,driver_document_id,archive_image_id,admin_review_status,ocr_decision,ocr_reason,file_url,storage_bucket,storage_path,uploaded_at,is_archive_only').order('uploaded_at',{ascending:false}).limit(300);
+  if(r.error)throw new Error(r.error.message);
+  rows=await Promise.all((r.data||[]).map(async item=>({...item,photoUrl:await signPhoto(item)})));
+  if(!rows.length)byId('counts').textContent='لا توجد سجلات مرئية لهذا الحساب. تأكدي أنه حساب أدمن مُصرّح له بمراجعة أرشيف الـOCR.';
+  render();
+ }catch(e){byId('counts').textContent='تعذّر تحميل بيانات المراجعة: '+String(e.message||e);byId('items').replaceChildren();}
+ finally{byId('refresh').disabled=false;}
+}
+function render(){
+ const filter=byId('filter').value,search=byId('search').value.trim().toLocaleLowerCase('ar');
+ const filtered=rows.filter(r=>{
+  const d=String(r.ocr_decision||'').toUpperCase();
+  if(filter==='archive'&&r.record_source!=='ocr_archive')return false;
+  if(filter!=='all'&&filter!=='archive'&&d!==filter)return false;
+  return !search || [r.driver_name,r.driver_phone,r.driver_id,r.document_type,r.document_side,r.ocr_reason].some(v=>String(v||'').toLocaleLowerCase('ar').includes(search));
+ });
+ if(rows.length)byId('counts').textContent='عدد النتائج: '+filtered.length+' من أصل '+rows.length+' سجل — منها '+rows.filter(x=>x.record_source==='ocr_archive').length+' صورة مؤرشفة و'+rows.filter(x=>x.record_source==='ocr_attempt').length+' محاولة OCR تاريخية';
+ const fragment=document.createDocumentFragment();
+ for(const r of filtered){
+  const item=node('article','item');
+  const h=node('header');const line=node('div','heading');
+  line.append(node('h2','',labels[r.document_type]||r.document_type||'مستند'));
+  const decision=String(r.ocr_decision||'UNRECORDED').toUpperCase();
+  line.append(node('span','tag '+(decision==='REJECT'||decision==='ERROR'?'problem':decision==='PASS'?'pass':'review'),statuses[decision]||decision));
+  h.append(line,node('p','muted',r.record_source==='ocr_archive'?'الأصل المؤرشف لمحاولة OCR':r.record_source==='ocr_attempt'?'سجل محاولة OCR تاريخية':'مستند مسجّل لدى النظام'));item.append(h);
+  const photo=node('div','photo');
+  if(r.photoUrl){
+    const a=node('a');a.href=r.photoUrl;a.target='_blank';a.rel='noopener noreferrer';
+    const img=node('img');img.src=r.photoUrl;img.loading='lazy';img.referrerPolicy='no-referrer';img.alt='صورة المستند المرفوع';img.addEventListener('error',()=>{photo.replaceChildren(node('div','none','الصورة غير متاحة للعرض حاليًا، أو انتهت صلاحية الرابط. اضغطي تحديث.'));});
+    a.append(img);photo.append(a);
+  }else{photo.append(node('div','none',r.storage_path||r.file_url?'الصورة محفوظة لكن رابط عرضها غير متاح لهذا الحساب.':'لا توجد صورة متاحة لهذا السجل القديم.'));}
+  item.append(photo);
+  const detail=node('div','details'),dl=node('dl');
+  const add=(key,val)=>{dl.append(node('dt','',key),node('dd','',val||'—'));};
+  add('السائق',r.driver_name);add('الهاتف',r.driver_phone);add('نتيجة OCR',statuses[decision]||decision);
+  add('السبب المسجّل',r.ocr_reason||'لا يوجد سبب مسجّل');
+  add('حالة مراجعة الأدمن',(r.record_source==='ocr_archive'||r.record_source==='ocr_attempt')?'سجل OCR: ليس قرار أدمن':r.admin_review_status==='approved'?'معتمد إداريًا':r.admin_review_status==='rejected'?'مرفوض بقرار إداري':'تحت مراجعة الأدمن');
+  add('تاريخ الرفع',fmtDate(r.uploaded_at));
+  add('جهة الالتقاط',r.document_side||'—');
+  detail.append(dl);
+  const foot=node('div','foot');
+  foot.append(node('div','','معرّف السائق: '+r.driver_id));
+  if(r.archive_image_id)foot.append(node('div','','معرّف الأرشيف: '+r.archive_image_id));
+  if(r.file_url&&!r.photoUrl){
+    const u=goodUrl(r.file_url);if(u){const a=node('a','', 'فتح رابط المستند الأصلي');a.href=u;a.target='_blank';a.rel='noopener noreferrer';foot.append(a);}
+  }
+  detail.append(foot);item.append(detail);fragment.append(item);
+ }
+ byId('items').replaceChildren(fragment);
+}
+byId('login-form').addEventListener('submit',async e=>{
+ e.preventDefault();
+ const btn=byId('login-button');btn.disabled=true;
+ byId('login-message').textContent='جارِ التحقق من الحساب...';byId('login-message').className='muted';
+ const email=byId('email').value.trim(),password=byId('password').value;
+ try{
+  const r=await supabase.auth.signInWithPassword({email,password});
+  byId('password').value='';
+  if(r.error)throw r.error;
+  showGallery();await loadGallery();
+ }catch(err){showLogin('تعذّر تسجيل الدخول: '+String(err.message||err));}
+ finally{btn.disabled=false;}
+});
+byId('logout').addEventListener('click',async()=>{await supabase.auth.signOut();rows=[];byId('items').replaceChildren();showLogin('تم تسجيل الخروج.');});
+byId('search').addEventListener('input',render);
+byId('filter').addEventListener('change',render);
+byId('refresh').addEventListener('click',loadGallery);
+try{
+ const r=await supabase.auth.getUser();
+ if(!r.error&&r.data?.user){showGallery();await loadGallery();}
+ else showLogin();
+}catch(_){showLogin('تعذّر التحقق من الجلسة. جربي تسجيل الدخول.');}
+</script>
+</body>
+</html>
