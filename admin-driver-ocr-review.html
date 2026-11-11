@@ -1,0 +1,53 @@
+<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer"><title>ع السكة - مراجعة صور السائقين</title>
+<style>body{font-family:system-ui,Tahoma;background:#121b29;color:white;margin:0}header{background:#1e2b3c;padding:24px 4%;border-bottom:1px solid #536177}h1{color:#e9c669;font-size:24px;margin:0}main{margin:auto;max-width:1250px;padding:24px}p,small{color:#cad3df}section{background:#1e2d41;padding:20px;border:1px solid #455670;border-radius:14px;margin-bottom:18px}button,input,select{font:inherit;padding:11px;border-radius:9px}button{border:0;background:#e9c669;color:#1a2231;font-weight:bold;cursor:pointer}button:disabled{opacity:.5}button.danger{background:#a8434e;color:white}button.alt{background:#3e5169;color:white}input,select{background:#111d2d;color:white;border:1px solid #60718a}form,.filters,.actions{display:flex;flex-wrap:wrap;gap:10px}.filters{margin:18px 0}input{min-width:220px;flex:1}.stats{display:flex;gap:20px;flex-wrap:wrap} .stats b{color:#e9c669;font-size:22px}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:16px}.card{background:#25374c;border-radius:12px;border:1px solid #51637b;overflow:hidden}.photo{height:200px;background:#0f1928;display:grid;place-items:center}.photo img{width:100%;height:100%;object-fit:contain}.info{padding:14px;overflow-wrap:anywhere;line-height:1.75;font-size:13px}.info strong{display:block;color:#f1ce7b;font-size:17px}.actions button{font-size:12px;flex:1}.hidden{display:none}#message{margin:18px 0;color:#f1ce7b}a{color:#f1ce7b}</style></head>
+<body><header><h1>ع السكة | مراجعة كل صور مستندات السائقين</h1><p>كل صورة لها قرار مستقل من الأدمن. الـOCR يقرأ فقط ولا يوافق أو يرفض.</p><a href="https://www.3asekka.com/admin">العودة للوحة الأدمن الرئيسية</a></header><main>
+<section id="login"><h2>تسجيل دخول الأدمن</h2><p>ادخلي البريد وكلمة المرور الخاصين بحساب الإدارة في ع السكة.</p><form id="loginForm"><input id="email" placeholder="بريد الأدمن" type="email" required autocomplete="username"><input id="password" placeholder="كلمة المرور" type="password" required autocomplete="current-password"><button>دخول</button></form></section>
+<section id="workspace" class="hidden"><div class="stats"><span>إجمالي الصور <b id="total">0</b></span><span>بانتظار المراجعة <b id="pending">0</b></span><button class="alt" id="refresh">تحديث</button><button class="alt" id="logout">خروج</button></div><div class="filters"><input id="filter" placeholder="بحث بالاسم أو معرف السائق أو نوع المستند"><select id="status"><option value="pending">تحت المراجعة</option><option value="all">الكل</option><option value="approved">وافق الأدمن</option><option value="rejected">رفض الأدمن</option><option value="retake_required">إعادة تصوير</option></select></div><div class="cards" id="cards"></div></section>
+<div id="message" role="status" aria-live="polite"></div></main>
+<script type="module">
+import {createClient} from "https://esm.sh/@supabase/supabase-js@2.110.0";
+const sb=createClient("https://ldyosvgmyblicggcelrk.supabase.co","sb_publishable_UE7ri0U4jqDzksC14E6ujw_H7oU3Mzv",{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});
+const endpoint="https://ldyosvgmyblicggcelrk.supabase.co/functions/v1/admin-driver-ocr-review-v1",el=id=>document.getElementById(id);
+const labels={national_id_front:"وجه البطاقة",national_id_back:"ظهر البطاقة",driver_license:"رخصة القيادة",vehicle_registration:"رخصة السيارة",vehicle_photo:"صورة السيارة",profile_photo:"الصورة الشخصية"};
+const statuses={pending:"تحت المراجعة",approved:"وافق الأدمن",rejected:"رفض الأدمن",retake_required:"طلب إعادة تصوير"};
+let items=[],busy=false;
+function msg(s){el("message").textContent=s||""}
+function show(logged){el("login").classList.toggle("hidden",logged);el("workspace").classList.toggle("hidden",!logged)}
+async function request(method,body){const {data:{session}}=await sb.auth.getSession();if(!session)throw Error("سجلي الدخول أولاً");
+const r=await fetch(endpoint,{method,cache:"no-store",headers:{"authorization":"Bearer "+session.access_token,"content-type":"application/json"},body:body?JSON.stringify(body):undefined});
+const j=await r.json().catch(()=>({}));if(!r.ok)throw Error(j.detail||j.error||"تعذر الاتصال");return j}
+function add(parent,tag,value,cls){const e=document.createElement(tag);if(value!=null)e.textContent=String(value);if(cls)e.className=cls;parent.appendChild(e);return e}
+function btn(label,cls,fn){const b=document.createElement("button");b.type="button";b.textContent=label;b.className=cls;b.onclick=fn;return b}
+function render(){
+let q=el("filter").value.trim().toLowerCase(),st=el("status").value;el("total").textContent=items.length;el("pending").textContent=items.filter(x=>x.admin_review_status==="pending").length;
+const root=el("cards");root.replaceChildren();const qp=new URLSearchParams(location.search);const start=Date.parse(qp.get("from")||"");const end=Date.parse(qp.get("until")||"");let shown=items.filter(x=>(st==="all"||x.admin_review_status===st)&&[x.driver_name,x.driver_id,x.document_type].join(" ").toLowerCase().includes(q)&&(!Number.isFinite(start)||Date.parse(x.uploaded_at)>=start)&&(!Number.isFinite(end)||Date.parse(x.uploaded_at)<end));
+for(const x of shown){const card=add(root,"div",null,"card"),photo=add(card,"div",null,"photo");
+if(x.image_url){const im=document.createElement("img");im.src=x.image_url;im.alt="صورة مستند";im.loading="lazy";photo.appendChild(im)}
+else add(photo,"span","الصورة غير متاحة");
+const info=add(card,"div",null,"info");add(info,"strong",(x.driver_name||"سائق")+" — "+(labels[x.document_type]||x.document_type)+(x.document_side==="back"?" — ظهر":x.document_side==="front"?" — وجه":""));
+add(info,"div","الحالة: "+(statuses[x.admin_review_status]||x.admin_review_status));
+add(info,"div","السائق: "+x.driver_id);
+add(info,"div","التاريخ: "+new Date(x.uploaded_at).toLocaleString("ar-EG",{timeZone:"Africa/Cairo"}));
+add(info,"div","نتيجة OCR: "+(x.ocr_observation||"لم تكتمل القراءة"));if(x.ocr_reason)add(info,"div","ملاحظة آلية للقراءة فقط: "+x.ocr_reason);
+if(x.review_reason)add(info,"div","سبب قرار الأدمن: "+x.review_reason);
+if(x.image_url){const a=add(info,"a","فتح الصورة كاملة");a.href=x.image_url;a.target="_blank";a.rel="noopener noreferrer"}
+if(x.admin_review_status==="pending"){const actions=add(info,"div",null,"actions");
+actions.appendChild(btn("قبول الصورة","",()=>review(x,"approve")));
+actions.appendChild(btn("رفض","danger",()=>review(x,"reject")));
+actions.appendChild(btn("إعادة تصوير","alt",()=>review(x,"retake")));}}
+if(!shown.length)add(root,"p","لا توجد صور مطابقة.");}
+async function load(){msg("جارٍ تحميل الصور من Supabase...");try{const r=await request("GET");items=r.items||[];render();msg("");}catch(e){msg("تعذر التحميل: "+e.message)}}
+async function review(x,action){if(busy)return;let reason=null;
+if(action==="approve"){if(!confirm("هل راجعتِ هذه الصورة بنفسك وتؤكدين الموافقة؟"))return}
+else{reason=prompt(action==="retake"?"سبب طلب إعادة التصوير:":"سبب الرفض:");if(!reason||reason.trim().length<4){msg("اكتبي سبباً واضحاً للمراجعة.");return}}
+busy=true;msg("جارٍ تسجيل قرار الأدمن...");
+try{await request("POST",{archive_image_id:x.archive_image_id,action,reason});msg("تم تسجيل القرار وربطه بسجل المستندات الرسمي.");await load()}
+catch(e){msg("لم يتم اعتماد القرار: "+e.message)}finally{busy=false}}
+el("loginForm").onsubmit=async e=>{e.preventDefault();msg("جارٍ تسجيل الدخول...");
+const {error}=await sb.auth.signInWithPassword({email:el("email").value.trim(),password:el("password").value});if(error){msg(error.message);return}el("password").value="";try{await request("GET");show(true);await load()}catch(e){await sb.auth.signOut();show(false);msg("الحساب ليس أدمن أو تعذر التحقق من صلاحياته.")}};
+el("logout").onclick=async()=>{await sb.auth.signOut();show(false);items=[];msg("")};
+el("refresh").onclick=load;el("filter").oninput=render;el("status").onchange=render;
+const driver=new URLSearchParams(location.search).get("driver");if(driver)el("filter").value=driver;
+const {data:{session}}=await sb.auth.getSession();if(session){try{await request("GET");show(true);await load()}catch{await sb.auth.signOut();}}
+setInterval(()=>{if(!document.hidden && !el("workspace").classList.contains("hidden") && !busy)load();},60000);
+</script></body></html>
